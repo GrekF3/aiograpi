@@ -235,14 +235,16 @@ class PublicRequestMixin:
                     "Unexpected status '{}' in response. Message: '{}'".format(
                         body_json.get("status", None), body_json.get("message", None)
                     ),
-                    response=body_json,
+                    response=None,
+                    raw_response=body_json,
                 )
 
             data = body_json.get("data")
             if not isinstance(data, dict):
                 raise ClientGraphqlError(
                     "GraphQL response does not contain 'data' payload",
-                    response=body_json,
+                    response=None,
+                    raw_response=body_json,
                 )
 
             return data
@@ -255,7 +257,9 @@ class PublicRequestMixin:
             except orjson.JSONDecodeError:
                 pass
             raise ClientGraphqlError(
-                "Error: '{}'. Message: '{}'".format(e, message), response=e.response
+                "Error: '{}'. Message: '{}'".format(e, message),
+                response=e.response,
+                raw_response=getattr(e, "response", None),
             )
 
 

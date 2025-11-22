@@ -99,12 +99,17 @@ class Session:
         self.verify = False
         self._client = None
         self._proxies = None
+        self._set_client()
 
     @property
     def cookies(self):
+        if self._client is None:
+            self._set_client()
         return self._client.cookies.jar
 
     def cookies_dict(self):
+        if self._client is None:
+            self._set_client()
         return {c.name: c.value for c in self._client.cookies.jar}
 
     def set_cookies(self, d):

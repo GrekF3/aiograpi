@@ -238,7 +238,14 @@ class PublicRequestMixin:
                     response=body_json,
                 )
 
-            return body_json["data"]
+            data = body_json.get("data")
+            if not isinstance(data, dict):
+                raise ClientGraphqlError(
+                    "GraphQL response does not contain 'data' payload",
+                    response=body_json,
+                )
+
+            return data
 
         except ClientBadRequestError as e:
             message = None

@@ -1,3 +1,5 @@
+import inspect
+
 import httpx
 import orjson
 import zstandard as zstd
@@ -30,6 +32,7 @@ from httpx._client import ClientState
 from httpx._decoders import SUPPORTED_DECODERS, ContentDecoder
 
 httpx.Response.json = lambda self: orjson.loads(self.content)
+_HAS_PROXIES_PARAM = "proxies" in inspect.signature(httpx.AsyncClient.__init__).parameters
 
 
 class ZstdDecoder(ContentDecoder):
@@ -59,12 +62,34 @@ SUPPORTED_DECODERS["zstd"] = ZstdDecoder
 DEFAULT_TIMEOUT = 45
 
 
-async def request(method, url, proxy=None, **kwargs):
+def _proxy_kwargs(proxy_or_map):
+    """
+    Build proxy kwargs compatible with both httpx <0.28 (proxies) and >=0.28 (proxy).
+    """
+    if _HAS_PROXIES_PARAM:
+        return {"proxies": proxy_or_map}
+    proxy = None
+    if isinstance(proxy_or_map, dict):
+        proxy = (
+            proxy_or_map.get("all://")
+            or proxy_or_map.get("https")
+            or proxy_or_map.get("http")
+            or proxy_or_map.get("https://")
+            or proxy_or_map.get("http://")
+        )
+        if proxy is None and proxy_or_map:
+            proxy = next(iter(proxy_or_map.values()))
+    else:
+        proxy = proxy_or_map
+    return {"proxy": proxy}
+
+
+async def request(method, url, proxy=None, proxies=None, **kwargs):
     if "timeout" not in kwargs:
         kwargs["timeout"] = DEFAULT_TIMEOUT
-    async with httpx.AsyncClient(
-        proxy=proxy, verify=False, follow_redirects=True
-    ) as client:
+    client_kwargs = {"verify": False, "follow_redirects": True}
+    client_kwargs.update(_proxy_kwargs(proxies if proxies is not None else proxy))
+    async with httpx.AsyncClient(**client_kwargs) as client:
         return await client.request(method, url, **kwargs)
 
 
@@ -73,7 +98,7 @@ class Session:
         self.headers = {}
         self.verify = False
         self._client = None
-        self._proxy = None
+        self._proxies = None
 
     @property
     def cookies(self):
@@ -87,18 +112,18 @@ class Session:
             self._client.cookies.set(k, v)
 
     @property
-    def proxy(self):
-        return self._proxy
+    def proxies(self):
+        return self._proxies
 
-    @proxy.setter
-    def proxy(self, p):
-        self._proxy = p
+    @proxies.setter
+    def proxies(self, p):
+        self._proxies = p
         self._set_client()
 
     def _set_client(self):
-        self._client = httpx.AsyncClient(
-            proxy=self._proxy, verify=self.verify, follow_redirects=True
-        )
+        client_kwargs = {"verify": self.verify, "follow_redirects": True}
+        client_kwargs.update(_proxy_kwargs(self._proxies))
+        self._client = httpx.AsyncClient(**client_kwargs)
 
     async def __aenter__(self):
         return self
@@ -110,7 +135,7 @@ class Session:
         if self._client and self._client._state is ClientState.OPENED:
             await self._client.__aexit__()
 
-    async def request(self, *args, headers=None, proxy=None, **kwargs):
+    async def request(self, *args, headers=None, proxies=None, **kwargs):
         if "timeout" not in kwargs:
             kwargs["timeout"] = DEFAULT_TIMEOUT
         if self._client._state is ClientState.UNOPENED:
@@ -118,6 +143,8 @@ class Session:
         headers = self.headers | (headers or {})
         headers = {k: v for k, v in headers.items() if v is not None}
         kwargs = {k: v for k, v in kwargs.items() if v}
+        if proxies is not None:
+            kwargs.update(_proxy_kwargs(proxies))
         return await self._client.request(*args, headers=headers, **kwargs)
 
     async def get(self, *args, **kwargs):

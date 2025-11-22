@@ -78,10 +78,15 @@ class UserMixin:
         data = await self.public_graphql_request(
             variables, query_hash="ad99dd9d3646cc3c0dda65debcd266a7"
         )
-        if not data["user"]:
-            raise UserNotFound(user_id=user_id, **data)
-        user = extract_user_short(data["user"]["reel"]["user"])
-        return user
+        user_block = data.get("user") if isinstance(data, dict) else None
+        if not user_block:
+            raise UserNotFound(user_id=user_id, **(data or {}))
+        reel_user = (
+            user_block.get("reel", {}) if isinstance(user_block, dict) else {}
+        ).get("user")
+        if not reel_user:
+            raise UserNotFound(user_id=user_id, **user_block)
+        return extract_user_short(reel_user)
 
     async def username_from_user_id_gql(self, user_id: str) -> str:
         """
@@ -125,6 +130,9 @@ class UserMixin:
         try:
             username = await self.username_from_user_id_gql(user_id)
         except ClientError:
+            username = await self.user_info_v1(user_id).username
+        except Exception:
+            # Unexpected shape from GraphQL — fall back to private API
             username = await self.user_info_v1(user_id).username
         return username
 

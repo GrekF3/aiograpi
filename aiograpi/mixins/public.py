@@ -22,6 +22,7 @@ from aiograpi.exceptions import (
     ClientUnauthorizedError,
     TermsAccept,
     TermsUnblock,
+    IsRegulatedC18Error
 )
 from aiograpi.utils import random_delay
 

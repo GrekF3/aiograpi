@@ -94,7 +94,8 @@ class Client(
 
     def set_proxy(self, dsn: str):
         if not dsn:
-            self.public.proxy = self.private.proxy = None
+            self.public.proxies = self.private.proxies = self.graphql.proxies = None
+            self.public.proxy = self.private.proxy = self.graphql.proxy = None
             return False
         assert isinstance(
             dsn, str
@@ -104,5 +105,8 @@ class Client(
             scheme="http://" if not urlparse(self.proxy).scheme else "",
             href=self.proxy,
         )
+        # httpx Session ожидает proxies, а не proxy — иначе запросы уходят напрямую
+        self.public.proxies = self.private.proxies = self.graphql.proxies = proxy_href
+        # для логов оставляем человекочитаемое поле
         self.public.proxy = self.private.proxy = self.graphql.proxy = proxy_href
         return True

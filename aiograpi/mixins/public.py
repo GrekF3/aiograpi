@@ -20,9 +20,9 @@ from aiograpi.exceptions import (
     ClientNotFoundError,
     ClientThrottledError,
     ClientUnauthorizedError,
+    IsRegulatedC18Error,
     TermsAccept,
     TermsUnblock,
-    IsRegulatedC18Error
 )
 from aiograpi.utils import random_delay
 

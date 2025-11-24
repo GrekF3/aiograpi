@@ -523,6 +523,15 @@ class PrivateRequestMixin:
                         "use a quality proxy provider (not free, not shared)"
                     )
                     raise ProxyAddressIsBlocked(**last_json)
+                elif response.status_code == 400 and not (message or error_type):
+                    proxy_info = getattr(self.private, "proxy", None) or getattr(
+                        self.private, "proxies", None
+                    )
+                    raise ConnectProxyError(
+                        f"Proxy returned empty 400 (proxy={proxy_info})",
+                        response=response,
+                        **last_json,
+                    )
                 elif error_type or message:
                     self.logger.warning("UnkNownError %r (%r)", last_json, response)
                     raise UnknownError(**last_json)

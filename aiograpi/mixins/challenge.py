@@ -16,6 +16,7 @@ from aiograpi.exceptions import (
     ChallengeUnknownStep,
     ClientNotFoundError,
     LegacyForceSetNewPasswordForm,
+    UnknownError,
     RecaptchaChallengeForm,
     SelectContactPointRecoveryForm,
     SubmitPhoneNumberForm,
@@ -435,25 +436,52 @@ class ChallengeResolveMixin:
                         f'ChallengeResolve: Choice "email" or "phone_number" (sms) not available to this account {self.last_json}'
                     )
             wait_seconds = 5
-            for attempt in range(24):
-                churl = "https://i.instagram.com/%s" % challenge_url
-                code = await self.challenge_code_handler(
-                    self.username,
-                    ChallengeChoice.EMAIL,
-                    challenge_url=churl,
-                    sessionid=self.sessionid,
+            max_code_attempts = 3
+            last_error = None
+            for code_attempt in range(1, max_code_attempts + 1):
+                code = None
+                for attempt in range(24):
+                    churl = "https://i.instagram.com/%s" % challenge_url
+                    code = await self.challenge_code_handler(
+                        self.username,
+                        ChallengeChoice.EMAIL,
+                        challenge_url=churl,
+                        sessionid=self.sessionid,
+                    )
+                    if code:
+                        break
+                    await asyncio.sleep(wait_seconds)
+                if not code:
+                    raise ChallengeError(
+                        f"ChallengeResolve: Code not received for {self.username}"
+                    )
+                print(
+                    f'Code entered "{code}" for {self.username} ({attempt} attempts by {wait_seconds} seconds)'
                 )
-                if code:
-                    break
-                await asyncio.sleep(wait_seconds)
-            print(
-                f'Code entered "{code}" for {self.username} ({attempt} attempts by {wait_seconds} seconds)'
-            )
-            await self._send_private_request(challenge_url, {"security_code": code})
-            # assert 'logged_in_user' in client.last_json
-            assert self.last_json.get("action", "") == "close"
-            assert self.last_json.get("status", "") == "ok"
-            return True
+                try:
+                    await self._send_private_request(
+                        challenge_url, {"security_code": code}
+                    )
+                    assert self.last_json.get("action", "") == "close"
+                    assert self.last_json.get("status", "") == "ok"
+                    return True
+                except UnknownError as e:
+                    last_error = e
+                    msg = str(e)
+                    if "Please check the code we sent you and try again" in msg:
+                        logger.warning(
+                            "ChallengeResolve: bad code for %s (attempt %s/%s)",
+                            self.username,
+                            code_attempt,
+                            max_code_attempts,
+                        )
+                        if code_attempt < max_code_attempts:
+                            await asyncio.sleep(wait_seconds)
+                            continue
+                    raise
+            if last_error:
+                raise last_error
+            return False
         elif step_name == "":
             assert self.last_json.get("action", "") == "close"
             assert self.last_json.get("status", "") == "ok"

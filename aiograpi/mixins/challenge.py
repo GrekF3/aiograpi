@@ -14,6 +14,7 @@ from aiograpi.exceptions import (
     ChallengeRequired,
     ChallengeSelfieCaptcha,
     ChallengeUnknownStep,
+    ClientNotFoundError,
     LegacyForceSetNewPasswordForm,
     RecaptchaChallengeForm,
     SelectContactPointRecoveryForm,
@@ -81,6 +82,14 @@ class ChallengeResolveMixin:
             params = {}
         try:
             await self._send_private_request(challenge_url[1:], params=params)
+        except ClientNotFoundError as e:
+            # Some challenges return auth_platform apc links that are not
+            # resolvable via private API. Let upper layers handle fallback.
+            if "auth_platform" in challenge_url:
+                raise ChallengeUnknownStep(
+                    f'ChallengeResolve: auth_platform flow not supported for "{self.username}" ({challenge_url})'
+                ) from e
+            raise
         except ChallengeRequired:
             assert self.last_json["message"] == "challenge_required", self.last_json
             return await self.challenge_resolve_contact_form(challenge_url)

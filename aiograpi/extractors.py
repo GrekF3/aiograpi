@@ -375,6 +375,10 @@ def extract_reply_message(data):
             # Instagram ¯\_(ツ)_/¯
             clip = clip.get("clip")
         data["clip"] = extract_media_v1(clip)
+    xma_media_share = data.get("xma_media_share") or data.get("xma_clip") or {}
+    if xma_media_share:
+        xma_item = xma_media_share[0] if isinstance(xma_media_share, list) else xma_media_share
+        data["xma_share"] = extract_media_v1_xma(xma_item)
 
     data["timestamp"] = datetime.datetime.fromtimestamp(int(data["timestamp"]) / 1_000_000)
     data["user_id"] = str(data["user_id"])
@@ -402,9 +406,10 @@ def extract_direct_message(data):
             # Instagram ¯\_(ツ)_/¯
             clip = clip.get("clip")
         data["clip"] = extract_media_v1(clip)
-    xma_media_share = data.get("xma_media_share", {})
+    xma_media_share = data.get("xma_media_share") or data.get("xma_clip") or {}
     if xma_media_share:
-        data["xma_share"] = extract_media_v1_xma(xma_media_share[0])
+        xma_item = xma_media_share[0] if isinstance(xma_media_share, list) else xma_media_share
+        data["xma_share"] = extract_media_v1_xma(xma_item)
 
     data["timestamp"] = datetime.datetime.fromtimestamp(
         int(data["timestamp"]) / 1_000_000

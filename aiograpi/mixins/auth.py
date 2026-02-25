@@ -9,7 +9,7 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from uuid import uuid4
 
 from pydantic import ValidationError
@@ -261,6 +261,7 @@ class LoginMixin(PreLoginFlowMixin, PostLoginFlowMixin):
     last_login = None
     relogin_attempt = 0
     device_settings = {}
+    app_settings = {}
     client_session_id = ""
     tray_session_id = ""
     advertising_id = ""
@@ -297,16 +298,18 @@ class LoginMixin(PreLoginFlowMixin, PostLoginFlowMixin):
         self.set_timezone_offset(
             self.settings.get("timezone_offset", self.timezone_offset)
         )
-        self.set_device(self.settings.get("device_settings"))
-        # self.bloks_versioning_id = hashlib.sha256(
-        #     json.dumps(self.device_settings)
-        # ).hexdigest()
-        # this param is constant and will change by Instagram app version
-        self.bloks_versioning_id = (
-            "ce555e5500576acd8e84a66018f54a05720f2dce29f0bb5a1f97f0c10d6fac48"
-        )
-        self.set_user_agent(self.settings.get("user_agent"))
         self.set_uuids(self.settings.get("uuids") or {})
+        self.set_device(self.settings.get("device_settings"))
+        self.set_app_settings(
+            self.settings.get("app_settings"),
+            self.settings.get("device_settings"),
+        )
+        user_agent = self.settings.get("user_agent")
+        if self._user_agent_matches_app_settings(user_agent, self.app_settings):
+            self.set_user_agent(user_agent)
+        else:
+            # Rebuild UA if app settings changed or mismatch
+            self.set_user_agent("")
         self.set_locale(self.settings.get("locale", self.locale))
         self.set_country(self.settings.get("country", self.country))
         self.set_country_code(self.settings.get("country_code", self.country_code))
@@ -563,6 +566,7 @@ class LoginMixin(PreLoginFlowMixin, PostLoginFlowMixin):
             "cookies": self.private.cookies_dict(),
             "last_login": self.last_login,
             "device_settings": self.device_settings,
+            "app_settings": self.app_settings,
             "user_agent": self.user_agent,
             "country": self.country,
             "country_code": self.country_code,
@@ -632,8 +636,8 @@ class LoginMixin(PreLoginFlowMixin, PostLoginFlowMixin):
         bool
             A boolean value
         """
-        self.device_settings = device or {
-            "app_version": "269.0.0.18.75",
+        app_keys = {"app_version", "version_code", "bloks_versioning_id"}
+        default_device = {
             "android_version": 26,
             "android_release": "8.0.0",
             "dpi": "480dpi",
@@ -642,12 +646,101 @@ class LoginMixin(PreLoginFlowMixin, PostLoginFlowMixin):
             "device": "devitron",
             "model": "6T Dev",
             "cpu": "qcom",
-            "version_code": "314665256",
         }
+        if not isinstance(device, dict):
+            device = None
+        device = device or default_device
+        # Split app settings if they were included in device_settings (backward compat)
+        app_settings = {k: device.get(k) for k in app_keys if k in device}
+        if app_settings:
+            device = {k: v for k, v in device.items() if k not in app_keys}
+        self.device_settings = device
         self.settings["device_settings"] = self.device_settings
+        if app_settings:
+            self.set_app_settings(app_settings)
         if reset:
             self.set_uuids({})
             # self.settings = self.get_settings()
+        return True
+
+    def _select_app_settings(self, seed: Optional[str] = None) -> Dict:
+        app_settings = getattr(config, "APP_SETTINGS", []) or []
+        if not app_settings:
+            return {
+                "app_version": config.DEFAULT_APP_VERSION,
+                "version_code": config.DEFAULT_VERSION_CODE,
+                "bloks_versioning_id": getattr(
+                    config, "DEFAULT_BLOKS_VERSIONING_ID", ""
+                ),
+            }
+        if seed:
+            try:
+                idx = int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(
+                    app_settings
+                )
+            except Exception:
+                idx = random.randint(0, len(app_settings) - 1)
+        else:
+            idx = random.randint(0, len(app_settings) - 1)
+        return dict(app_settings[idx])
+
+    @staticmethod
+    def _user_agent_matches_app_settings(
+        user_agent: Optional[str], app_settings: Optional[Dict]
+    ) -> bool:
+        if not user_agent or not app_settings:
+            return False
+        app_version = app_settings.get("app_version")
+        version_code = app_settings.get("version_code")
+        if not app_version or not version_code:
+            return False
+        return app_version in user_agent and version_code in user_agent
+
+    def set_app_settings(
+        self,
+        app_settings: Optional[Dict] = None,
+        device_settings: Optional[Dict] = None,
+        reset: bool = False,
+    ) -> bool:
+        """
+        Helper to set app settings (app_version/version_code/bloks_versioning_id)
+
+        Parameters
+        ----------
+        app_settings: Dict, optional
+            Dict of app settings
+        device_settings: Dict, optional
+            device_settings that may contain app settings (backward compat)
+        reset: bool, optional
+            Whether to regenerate user agent/uuids after update
+
+        Returns
+        -------
+        bool
+            A boolean value
+        """
+        app_settings = app_settings or {}
+        if device_settings:
+            for key in ("app_version", "version_code", "bloks_versioning_id"):
+                if key in device_settings and key not in app_settings:
+                    app_settings[key] = device_settings[key]
+
+        known_by_version = getattr(config, "APP_SETTINGS_BY_VERSION", {}) or {}
+        app_version = app_settings.get("app_version")
+        if known_by_version:
+            if not app_version or app_version not in known_by_version:
+                app_settings = self._select_app_settings(seed=self.uuid or None)
+            else:
+                app_settings = dict(known_by_version[app_version])
+        else:
+            if not app_version:
+                app_settings = self._select_app_settings(seed=self.uuid or None)
+
+        self.app_settings = app_settings
+        self.settings["app_settings"] = self.app_settings
+        self.bloks_versioning_id = self.app_settings.get("bloks_versioning_id", "")
+        if reset:
+            self.set_user_agent("")
         return True
 
     def set_user_agent(self, user_agent: str = "", reset: bool = False) -> bool:
@@ -664,7 +757,14 @@ class LoginMixin(PreLoginFlowMixin, PostLoginFlowMixin):
         bool
             A boolean value
         """
-        data = dict(self.device_settings, locale=self.locale)
+        app_settings = self.app_settings or {}
+        if "app_version" not in app_settings or "version_code" not in app_settings:
+            app_settings = dict(app_settings)
+            app_settings.setdefault("app_version", config.DEFAULT_APP_VERSION)
+            app_settings.setdefault("version_code", config.DEFAULT_VERSION_CODE)
+        data = dict(self.device_settings)
+        data.update(app_settings)
+        data["locale"] = self.locale
         self.user_agent = user_agent or config.USER_AGENT_BASE.format(**data)
         # changed in base_headers:
         # self.private.headers.update({"User-Agent": self.user_agent})

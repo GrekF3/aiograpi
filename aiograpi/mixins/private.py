@@ -583,7 +583,10 @@ class PrivateRequestMixin:
             response.request.method,
             response.url,
             "{app_version}, {manufacturer} {model}".format(
-                app_version=self.device_settings.get("app_version"),
+                app_version=(
+                    getattr(self, "app_settings", {}) or {}
+                ).get("app_version")
+                or self.device_settings.get("app_version"),
                 manufacturer=self.device_settings.get("manufacturer"),
                 model=self.device_settings.get("model"),
             ),

@@ -1,6 +1,6 @@
 API_DOMAIN = "i.instagram.com"
 
-# Instagram 134.0.0.26.121
+# Instagram recent versions (see INSTAGRAM_APP_VERSIONS)
 # Android (26/8.0.0;
 # 480dpi; 1080x1920; Xiaomi;
 # MI 5s; capricorn; qcom; en_US; 205280538)
@@ -16,6 +16,31 @@ USER_AGENT_BASE = (
 SOFTWARE = (
     "{model}-user+{android_release}+OPR1.170623.032+V10.2.3.0.OAGMIXM+release-keys"
 )
+
+# App version settings (must stay in sync).
+# Keep at least these known pairs updated together:
+# app_version / version_code / bloks_versioning_id
+APP_SETTINGS = [
+    {
+        "app_version": "364.0.0.35.86",
+        "version_code": "374010953",
+        "bloks_versioning_id": "8ccf54aad76788a6ca03ddfc33afcdcf692f2f5a3ba814ea73d5facba7fa2c2d",
+    },
+    {
+        "app_version": "385.0.0.47.74",
+        "version_code": "378906843",
+        "bloks_versioning_id": "a8973d49a9cc6a6f65a4997c10216ce2a06f65a517010e64885e92029bb19221",
+    },
+]
+
+APP_SETTINGS_BY_VERSION = {item["app_version"]: item for item in APP_SETTINGS}
+INSTAGRAM_APP_VERSIONS = list(APP_SETTINGS_BY_VERSION.keys())
+
+DEFAULT_APP_VERSION = APP_SETTINGS[0]["app_version"]
+# Version code for the default app settings.
+DEFAULT_VERSION_CODE = APP_SETTINGS[0]["version_code"]
+# Default bloks versioning id for the default app settings.
+DEFAULT_BLOKS_VERSIONING_ID = APP_SETTINGS[0]["bloks_versioning_id"]
 
 # QUERY_HASH_PROFILE = 'c9100bf9110dd6361671f113dd02e7d6'
 # QUERY_HASH_MEDIAS = '42323d64886122307be10013ad2dcc44'

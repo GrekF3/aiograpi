@@ -1,9 +1,9 @@
 API_DOMAIN = "i.instagram.com"
 
-# Instagram recent versions (see INSTAGRAM_APP_VERSIONS)
-# Android (26/8.0.0;
-# 480dpi; 1080x1920; Xiaomi;
-# MI 5s; capricorn; qcom; en_US; 205280538)
+# Instagram 428.0.0.47.67
+# Android (34/14;
+# 480dpi; 1344x2992; Google/google;
+# Pixel 8 Pro; husky; husky; en_US; 961145276)
 USER_AGENT_BASE = (
     "Instagram {app_version} "
     "Android ({android_version}/{android_release}; "
@@ -17,10 +17,12 @@ SOFTWARE = (
     "{model}-user+{android_release}+OPR1.170623.032+V10.2.3.0.OAGMIXM+release-keys"
 )
 
-# App version settings (must stay in sync).
-# Keep at least these known pairs updated together:
-# app_version / version_code / bloks_versioning_id
 APP_SETTINGS = [
+    {
+        "app_version": "428.0.0.47.67",
+        "version_code": "961145276",
+        "bloks_versioning_id": "7189b949425f9bf80ea8bd880cf5a3080b292d9b1c4b38a18d112f7c4b71e7a8",
+    },
     {
         "app_version": "364.0.0.35.86",
         "version_code": "374010953",
